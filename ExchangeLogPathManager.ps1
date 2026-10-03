@@ -7,12 +7,14 @@ ExchangeLogPathManager.ps1 is read-only by default.
 
 Running the script without parameters reviews the current supported log path configuration on the local Exchange Mailbox server. It does not prompt for a destination path and it does not change Exchange configuration.
 
-The script has three operating modes:
+The script has four operating modes:
 
 1. Configuration Review (default)
+   - Runs when no parameters are supplied, or explicitly with -Review.
    - Reviews the local Exchange Mailbox server by default.
    - Use -Server to review one or more Exchange Mailbox servers.
    - Shows current paths, default paths, and Default/Custom/Null classification.
+   - Output is grouped by component, setting, and server.
    - No Exchange configuration changes are made.
 
 2. Log Root mode
@@ -23,11 +25,11 @@ The script has three operating modes:
      - Receive protocol logs
      - Send protocol logs
      - Connectivity logs
-   - Agent, Routing, DNS, pipeline tracing, mailbox delivery throttling, and other Reference-only settings are not moved by Log Root mode.
+   - Agent, Routing, DNS, pipeline tracing, mailbox delivery throttling, and the other supported settings are not moved by Log Root mode. Clone mode evaluates all supported settings.
    - -LogRootPath must be a local absolute drive path such as E:\EXCLOG. UNC paths are not accepted.
    - Without -ApplyChanges, this mode is preview-only.
 
-3. Reference mode
+3. Clone mode
    - Use -SourceServer with -TargetServer.
    - The script compares supported log path settings with the source server and builds target proposals using install-path-aware translation.
    - Source default paths are translated to each target server's own Exchange install path.
@@ -36,6 +38,15 @@ The script has three operating modes:
    - UNC/network paths and paths whose target drive cannot be verified are never applied automatically.
    - PipelineTracingPath is Review Only and is never changed automatically.
    - Without -ApplyChanges, this mode is read-only.
+
+4. Interactive Configure
+   - Use -Interactive. Without -Server, the script asks for the server list and validates every name.
+   - Common Log Root Path: one log root for all three transport components. The result is the same plan as -LogRootPath.
+   - Advanced per-component configuration: shows the current values, then asks for a log root or Skip for Transport Service, Front End Transport, and Mailbox Transport.
+   - Uses the same log path scope, path validation, and planner as Log Root mode.
+   - The selection is made once. It is reused unchanged when the plan is checked again before Apply.
+   - Requires an interactive console.
+   - Without -ApplyChanges, this mode is preview-only.
 
 -ApplyChanges is the explicit change gate. Even when it is used, the script shows the proposal before applying supported changes. PowerShell -WhatIf and -Confirm are also supported.
 
@@ -51,20 +62,29 @@ The script does not create log directories, restart Exchange services, generate 
 
 This version supports Exchange Server 2016, Exchange Server 2019, and Exchange Server Subscription Edition Mailbox role servers. Edge Transport is not supported by this script version.
 
+.PARAMETER Review
+Runs read-only Configuration Review mode explicitly.
+Running the script without parameters starts the same mode.
+
+.PARAMETER Interactive
+Runs guided Interactive Configure mode. The script asks for the log root selection and then uses the Log Root planning and safety workflow.
+Without -ApplyChanges, the run is preview-only. Requires an interactive console.
+
 .PARAMETER Server
-One or more Exchange Mailbox servers to review or use with -LogRootPath.
-If omitted, the local computer is used.
+One or more Exchange Mailbox servers to review, or to use with -LogRootPath or -Interactive.
+If omitted, the local computer is used. In Interactive mode the script asks for the server list instead.
 
 .PARAMETER LogRootPath
 Local absolute root path for higher-growth transport logs, for example E:\EXCLOG.
 The Exchange directory structure below V15 is preserved under this root.
 UNC paths are not accepted.
+A drive root such as K:\ shows a WARNING. A real Apply with a drive root needs a separate [y/N] confirmation (default N) that -Confirm:$false does not skip. A non-interactive real Apply with a drive root is blocked.
 
 .PARAMETER SourceServer
-Reference Exchange Mailbox server. Valid in Reference mode.
+Source Exchange Mailbox server. Valid in Clone mode.
 
 .PARAMETER TargetServer
-One or more Exchange Mailbox servers that receive the Reference-mode comparison/proposal.
+One or more Exchange Mailbox servers that receive the Clone-mode comparison/proposal.
 
 .PARAMETER ApplyChanges
 Explicitly allows the proposed supported changes to be applied.
@@ -73,7 +93,7 @@ Without this switch, all modes are read-only.
 .PARAMETER OutputFile
 Optional TXT report path.
 In Configuration Review mode, exports the current configuration.
-In Log Root or Reference mode, exports the proposal and planned Exchange PowerShell commands.
+In Log Root or Clone mode, exports the proposal and planned Exchange PowerShell commands.
 An existing file is never overwritten.
 -OutputFile does not enable changes and takes precedence over -ApplyChanges.
 
@@ -89,8 +109,8 @@ Displays a short usage guide and exits without initializing Exchange Management 
 Reviews the supported log path configuration on the local Exchange Mailbox server. No changes are made.
 
 .EXAMPLE
-.\ExchangeLogPathManager.ps1 -Server EX01,EX02
-Reviews the supported log path configuration on EX01 and EX02. No changes are made.
+.\ExchangeLogPathManager.ps1 -Review -Server EX01,EX02
+Reviews the supported log path configuration on EX01 and EX02, grouped by component, setting, and server. No changes are made.
 
 .EXAMPLE
 .\ExchangeLogPathManager.ps1 -OutputFile C:\Temp\ExchangeLogPaths.txt
@@ -114,11 +134,19 @@ Compares EX01 with EX02 and EX03 and shows the proposed target configuration. No
 
 .EXAMPLE
 .\ExchangeLogPathManager.ps1 -SourceServer EX01 -TargetServer EX02,EX03 -ApplyChanges
-Shows the Reference-mode proposal and then allows supported changes to be applied to EX02 and EX03.
+Shows the Clone-mode proposal and then allows supported changes to be applied to EX02 and EX03.
 
 .EXAMPLE
 .\ExchangeLogPathManager.ps1 -SourceServer EX01 -TargetServer EX02 -OutputFile C:\Temp\ExchangeLogPath-Plan.txt
-Exports the Reference-mode comparison, proposal, and planned commands. No changes are made.
+Exports the Clone-mode comparison, proposal, and planned commands. No changes are made.
+
+.EXAMPLE
+.\ExchangeLogPathManager.ps1 -Interactive
+Asks for the server list and the log root selection, then shows the proposal. No changes are made.
+
+.EXAMPLE
+.\ExchangeLogPathManager.ps1 -Interactive -Server EX01,EX02 -ApplyChanges
+Guided configuration for EX01 and EX02. Shows the proposal and then allows supported changes to be applied after confirmation.
 
 .EXAMPLE
 .\ExchangeLogPathManager.ps1 -NoPaging
@@ -126,8 +154,8 @@ Reviews the local server without console paging.
 
 .NOTES
 Author        : Ceyhun Kirmizitas
-Version       : 1.0
-Date          : 03/10/2026
+Version       : 1.1
+Date          : 04/10/2026
 Applies to    : Exchange Server Mailbox servers
 Compatibility : Intended for Exchange Server 2016, Exchange Server 2019, and Exchange Server Subscription Edition.
 Validated     : Live lab validation performed on Exchange build 15.2.1748.10 (Mailbox role) using Windows PowerShell 5.1.
@@ -151,6 +179,25 @@ The author is not responsible for any issues, outages, or data loss resulting fr
 
 Change Log
 ----------
+1.1 - 04/10/2026
+      -Review selects Configuration Review explicitly. Running the script
+      without parameters still starts Configuration Review.
+      Reference mode is renamed to Clone. Mode labels follow the
+      <Mode> / Preview, <Mode> / Apply, and <Mode> / Command Export pattern;
+      -OutputFile runs are labeled Command Export.
+      Review, Log Root, and Clone output is grouped by component, setting, and
+      server. A setting that already matches shows only its Status, plus any
+      drive or target path warning.
+      Interactive Configure (-Interactive): Common Log Root Path or Advanced
+      per-component configuration. Preview-only unless -ApplyChanges is
+      specified; uses the Log Root planner and the same safety workflow.
+      A drive root as log root (for example K:\) shows a WARNING and needs a
+      separate [y/N] confirmation (default N) in Interactive Configure and
+      before a real Log Root Apply. -Confirm:$false does not skip it; a
+      non-interactive real Apply with a drive root is blocked.
+      Built-in help is organized in MODES, INTERACTIVE, SAFETY, and EXAMPLES
+      sections.
+
 1.0 - 03/10/2026
       Initial release of ExchangeLogPathManager.ps1.
       Read-only Configuration Review is the default mode.
@@ -190,7 +237,14 @@ https://www.linkedin.com/in/ceyhun-kirmizitas/
 [CmdletBinding(DefaultParameterSetName = 'Review', SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
     [Parameter(Mandatory = $false, ParameterSetName = 'Review')]
+    [switch]$Review,
+
+    [Parameter(Mandatory = $true, ParameterSetName = 'Interactive')]
+    [switch]$Interactive,
+
+    [Parameter(Mandatory = $false, ParameterSetName = 'Review')]
     [Parameter(Mandatory = $false, ParameterSetName = 'LogRoot')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'Interactive')]
     [ValidateNotNullOrEmpty()]
     [string[]]$Server,
 
@@ -198,16 +252,17 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$LogRootPath,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'Reference')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Clone')]
     [ValidateNotNullOrEmpty()]
     [string]$SourceServer,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'Reference')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Clone')]
     [ValidateNotNullOrEmpty()]
     [string[]]$TargetServer,
 
     [Parameter(Mandatory = $false, ParameterSetName = 'LogRoot')]
-    [Parameter(Mandatory = $false, ParameterSetName = 'Reference')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'Clone')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'Interactive')]
     [switch]$ApplyChanges,
 
     [Parameter(Mandatory = $false)]
@@ -224,57 +279,113 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 $script:ScriptBaseName = 'ExchangeLogPathManager'
-$script:ScriptVersion = '1.0'
+$script:ScriptVersion = '1.1'
 
 if ($Help) {
     @"
 $($script:ScriptBaseName).ps1
-Exchange Server log path configuration manager
+Exchange Server transport log path review and configuration manager
 
-COMMON USAGE
-  Review the local server (default, read-only):
+MODES
+
+  Configuration Review (default, read-only):
     .\$($script:ScriptBaseName).ps1
+    .\$($script:ScriptBaseName).ps1 -Review -Server EX01,EX02
 
-  Review selected servers:
-    .\$($script:ScriptBaseName).ps1 -Server EX01,EX02
-
-  Save a configuration review:
-    .\$($script:ScriptBaseName).ps1 -OutputFile C:\Temp\ExchangeLogPaths.txt
-
-  Preview a new log root:
-    .\$($script:ScriptBaseName).ps1 -LogRootPath E:\EXCLOG
-
-  Preview a new log root on selected servers:
+  Log Root Preview:
     .\$($script:ScriptBaseName).ps1 -Server EX01,EX02 -LogRootPath E:\EXCLOG
 
-  Apply a new log root:
+  Log Root Apply:
     .\$($script:ScriptBaseName).ps1 -Server EX01,EX02 -LogRootPath E:\EXCLOG -ApplyChanges
 
-  Compare a reference server with target servers:
+  Clone Preview (read-only):
     .\$($script:ScriptBaseName).ps1 -SourceServer EX01 -TargetServer EX02,EX03
 
-  Apply a Reference-mode proposal:
+  Clone Apply:
     .\$($script:ScriptBaseName).ps1 -SourceServer EX01 -TargetServer EX02,EX03 -ApplyChanges
 
-  Disable console paging:
-    .\$($script:ScriptBaseName).ps1 -NoPaging
+  Interactive Configure Preview:
+    .\$($script:ScriptBaseName).ps1 -Interactive
 
-NOTES
-  - Default mode is Configuration Review and makes no Exchange changes.
-  - -LogRootPath without -ApplyChanges is preview-only.
-  - Reference mode without -ApplyChanges is read-only.
-  - Only -ApplyChanges can enable configuration changes.
-  - -OutputFile always takes precedence over -ApplyChanges and keeps the run read-only.
-  - -OutputFile never overwrites an existing file.
-  - PowerShell -WhatIf and -Confirm are supported with -ApplyChanges.
-  - -LogRootPath accepts local absolute drive paths only. UNC paths are rejected.
-  - Source custom paths outside the source Exchange install path are proposed literally when they are local absolute drive paths. Normal path, drive, capability, and policy validation still applies before Apply.
-  - This version supports Mailbox role servers only. Edge Transport is not supported.
-  - Console output pauses about once per screen. Press ENTER to continue or Q to exit.
-  - Use -NoPaging to print continuously. Paging is also disabled when -OutputFile is used.
-  - This script does not create log directories.
-  - Full help:
-      Get-Help .\$($script:ScriptBaseName).ps1 -Full
+  Interactive Configure Apply:
+    .\$($script:ScriptBaseName).ps1 -Interactive -Server EX01,EX02 -ApplyChanges
+
+INTERACTIVE
+
+  Start:
+    .\$($script:ScriptBaseName).ps1 -Interactive
+    Without -Server, the script asks for the server list.
+
+  1. Common Log Root Path
+     One log root for message tracking, connectivity, SMTP Receive,
+     and SMTP Send logs of all three transport components.
+     Same plan as -LogRootPath.
+
+  2. Advanced per-component configuration
+     Shows the current values. For each component:
+       1. Set a new log root for the component
+       2. Skip (default)
+     Log root prompt: Enter = keep current values (Skip).
+
+  Without -ApplyChanges, Interactive Configure is preview-only.
+  Pipeline tracing paths are Review Only and are never changed.
+
+SAFETY
+
+  Configuration Review is read-only.
+  Log Root, Clone, and Interactive Configure are read-only unless
+  -ApplyChanges is specified.
+
+  Log Root / Clone / Interactive Configure with -ApplyChanges:
+    Preview
+      -> Confirm
+      -> JSON pre-change snapshot
+      -> Apply
+      -> Verify
+    Configuration changed after Preview = BLOCKER before Apply
+
+  -OutputFile:
+    Exports/reports only. No Exchange configuration is changed.
+    Takes precedence over -ApplyChanges.
+    Never overwrites an existing file.
+
+  PowerShell -WhatIf and -Confirm are supported with -ApplyChanges.
+
+  -LogRootPath accepts local absolute drive paths only. UNC paths are rejected.
+  A drive root such as K:\ as the log root shows a WARNING and needs a
+  separate [y/N] confirmation (default N): in Interactive Configure when it
+  is entered, and before a real Log Root Apply. -Confirm:`$false does not
+  skip it. A non-interactive real Apply with a drive root is blocked.
+  Source custom paths outside the source Exchange install path are proposed
+  literally when they are local absolute drive paths. Normal path, drive,
+  capability, and policy validation still applies before Apply.
+
+  Mailbox role servers only. Edge Transport is not supported.
+  This script does not create log directories.
+
+  Review Only:
+    PipelineTracingPath
+
+EXAMPLES
+
+  Save a configuration review:
+    .\$($script:ScriptBaseName).ps1 -Review -OutputFile C:\Temp\ExchangeLogPaths.txt
+
+  Export a Log Root plan:
+    .\$($script:ScriptBaseName).ps1 -Server EX01 -LogRootPath E:\EXCLOG ``
+      -OutputFile C:\Temp\ExchangeLogPath-Plan.txt
+
+  Export a Clone plan:
+    .\$($script:ScriptBaseName).ps1 -SourceServer EX01 -TargetServer EX02 ``
+      -ApplyChanges -OutputFile C:\Temp\ExchangeLogPath-Commands.txt
+
+  Console paging:
+    Press ENTER to continue or Q to exit.
+    Use -NoPaging to print continuously.
+    Paging is disabled when -OutputFile is used.
+
+  Full comment-based help:
+    Get-Help .\$($script:ScriptBaseName).ps1 -Full
 "@ | Write-Host
     return
 }
@@ -284,6 +395,7 @@ NOTES
 # ---------------------------------------------------------------------------
 $script:OutputFileRequested = $false
 $script:ApplyIntent = $false
+$script:InteractiveSelection = $null
 
 $script:ServerIdentityCache = @{}
 $script:InstallPathCache = @{}
@@ -790,7 +902,8 @@ function Write-StatusHost {
 function Get-ModeInfo {
     param(
         [Parameter(Mandatory = $true)][string]$ParameterSetName,
-        [switch]$Apply
+        [switch]$Apply,
+        [switch]$CommandExport
     )
 
     switch ($ParameterSetName) {
@@ -803,34 +916,76 @@ function Get-ModeInfo {
             }
         }
         'LogRoot' {
+            if ($CommandExport) {
+                return [PSCustomObject]@{
+                    Mode         = 'Log Root / Command Export'
+                    Changes      = 'NONE'
+                    Description1 = 'The script builds a Current -> Proposed log path plan for the specified log root and exports the report and commands.'
+                    Description2 = 'No Exchange configuration changes will be made.'
+                }
+            }
             if ($Apply) {
                 return [PSCustomObject]@{
-                    Mode         = 'Apply Log Root Changes'
+                    Mode         = 'Log Root / Apply'
                     Changes      = 'ENABLED'
                     Description1 = 'The script builds a Current -> Proposed log path plan for the specified log root and shows a Preview.'
                     Description2 = 'Apply was explicitly enabled with -ApplyChanges and still requires confirmation and a successful pre-change snapshot.'
                 }
             }
             return [PSCustomObject]@{
-                Mode         = 'Log Root Preview'
+                Mode         = 'Log Root / Preview'
                 Changes      = 'NONE'
                 Description1 = 'The script builds a Current -> Proposed log path plan for the specified log root.'
                 Description2 = 'No Exchange configuration changes will be made. Use -ApplyChanges explicitly to enable Apply.'
             }
         }
-        'Reference' {
+        'Clone' {
+            if ($CommandExport) {
+                return [PSCustomObject]@{
+                    Mode         = 'Clone / Command Export'
+                    Changes      = 'NONE'
+                    Description1 = 'The script builds the source-to-target change plan and exports the report and commands.'
+                    Description2 = 'No Exchange configuration changes will be made.'
+                }
+            }
             if ($Apply) {
                 return [PSCustomObject]@{
-                    Mode         = 'Apply Reference Changes'
+                    Mode         = 'Clone / Apply'
                     Changes      = 'ENABLED'
                     Description1 = 'The script compares the source server with the target server(s) and shows a Preview.'
                     Description2 = 'Apply was explicitly enabled with -ApplyChanges and still requires confirmation and a successful pre-change snapshot.'
                 }
             }
             return [PSCustomObject]@{
-                Mode         = 'Reference Comparison'
+                Mode         = 'Clone / Preview'
                 Changes      = 'NONE'
-                Description1 = 'The script compares the source server with the target server(s) and shows the proposal.'
+                Description1 = 'The script compares the source server with the target server(s).'
+                Description2 = 'No Exchange configuration changes will be made. Use -ApplyChanges explicitly to enable Clone Apply.'
+            }
+        }
+        'Interactive' {
+            if ($CommandExport) {
+                return [PSCustomObject]@{
+                    Mode         = 'Interactive Configure / Command Export'
+                    Changes      = 'NONE'
+                    Description1 = 'The script reads the current values, lets you choose the log root(s), and exports the report and commands.'
+                    Description2 = 'No Exchange configuration changes will be made.'
+                }
+            }
+
+            if ($Apply) {
+                return [PSCustomObject]@{
+                    Mode         = 'Interactive Configure / Apply'
+                    Changes      = 'ENABLED'
+                    Description1 = 'The script reads the current values, lets you choose the log root(s), and shows a Preview.'
+                    Description2 = 'Apply was explicitly enabled with -ApplyChanges and still requires confirmation and a successful pre-change snapshot.'
+                }
+            }
+
+            return [PSCustomObject]@{
+                Mode         = 'Interactive Configure / Preview'
+                Changes      = 'NONE'
+                Description1 = 'The script reads the current values, lets you choose the log root(s), and shows a Preview.'
                 Description2 = 'No Exchange configuration changes will be made. Use -ApplyChanges explicitly to enable Apply.'
             }
         }
@@ -842,22 +997,22 @@ function Get-ModeInfo {
                 Description2 = 'No Exchange configuration changes will be made.'
             }
         }
-    }
-}
+    }}
 
 function Show-StartupBanner {
     param(
         [Parameter(Mandatory = $true)][string]$ParameterSetName,
-        [switch]$Apply
+        [switch]$Apply,
+        [switch]$CommandExport
     )
 
-    $modeInfo = Get-ModeInfo -ParameterSetName $ParameterSetName -Apply:$Apply
+    $modeInfo = Get-ModeInfo -ParameterSetName $ParameterSetName -Apply:$Apply -CommandExport:$CommandExport
     $changesColor = 'Green'
     if ($modeInfo.Changes -ne 'NONE') { $changesColor = 'Yellow' }
 
     Write-Host ''
     Write-Host ("{0}.ps1" -f $script:ScriptBaseName)
-    Write-Host 'Exchange Server transport log path configuration review, comparison, and change manager' -ForegroundColor Cyan
+    Write-Host 'Exchange Server transport log path review and configuration manager' -ForegroundColor Cyan
     Write-Host ''
     Write-Host 'Author  : Ceyhun Kirmizitas' -ForegroundColor Cyan
     Write-Host ("Version : {0}" -f $script:ScriptVersion) -ForegroundColor Cyan
@@ -881,6 +1036,42 @@ function Read-StartupConfirmation {
         if ($text -match '(?i)^\s*(q|quit|exit)\s*$') { return $false }
 
         Write-Warning 'Press ENTER to start or Q to exit.'
+    }
+}
+
+# A drive root such as K:\ is a valid log root, but it places the transport
+# logs directly on the drive root and is usually a typo. It has its own
+# WARNING and [y/N] confirmation. This is a separate safety gate, not
+# PowerShell -Confirm: -Confirm:$false never suppresses it.
+function Test-DriveRootPath {
+    param([AllowNull()][string]$Path)
+
+    return ([string]$Path -match '^[A-Za-z]:\\?$')
+}
+
+function Show-DriveRootWarning {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [string]$Prefix = ''
+    )
+
+    $drive = $Root.Substring(0, 2).ToUpperInvariant()
+    $example = Join-PathText -Root $Root -Relative 'TransportRoles\Logs\MessageTracking'
+    Write-Warning ("{0}'{1}' is a drive root. Transport logs would be placed directly below the drive root, for example {2}." -f $Prefix, $Root, $example)
+    Write-Host ("         A dedicated folder such as {0}\EXCLOG is recommended." -f $drive) -ForegroundColor Yellow
+}
+
+function Read-DriveRootConfirmation {
+    param([string]$Indent = '')
+
+    while ($true) {
+        $response = Read-Host ("{0}Use the drive root anyway? [y/N]" -f $Indent)
+        $text = ([string]$response).Trim()
+
+        if ([string]::IsNullOrEmpty($text) -or $text -match '(?i)^(n|no)$') { return $false }
+        if ($text -match '(?i)^(y|yes)$') { return $true }
+
+        Write-Warning 'Enter y or n.'
     }
 }
 
@@ -1805,7 +1996,6 @@ function New-ReferenceDesiredConfiguration {
             -TargetPathNote $targetPathNote `
             -DriveInfo $driveInfo))
     }
-
     return [PSCustomObject]@{
         Target         = $TargetSnapshot.Server
         TargetIdentity = $TargetSnapshot.Identity
@@ -1892,6 +2082,323 @@ function New-LogRootDesiredConfiguration {
             -ReviewNote $reviewNote `
             -TargetPathNote $targetPathNote `
             -DriveInfo $driveInfo))
+    }
+
+    return [PSCustomObject]@{
+        Target         = $TargetSnapshot.Server
+        TargetIdentity = $TargetSnapshot.Identity
+        Items          = @($desiredItems)
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Interactive Configure
+# ---------------------------------------------------------------------------
+# Interactive mode only collects input. The selected roots are planned by the
+# unchanged Log Root planner, and Preview, Confirm, snapshot, drift check,
+# Apply, and Verify are the same workflow that -LogRootPath uses.
+
+# Components that Log Root mode can move, in log path map order.
+function Get-InteractiveComponents {
+    $components = New-Object System.Collections.ArrayList
+    $seen = @{}
+    foreach ($entry in @($script:LogPathMap | Where-Object { $_.MoveInLogRootMode })) {
+        $key = [string]$entry.ServiceKey
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        [void]$components.Add([PSCustomObject]@{
+            ServiceKey    = $key
+            ServiceName   = [string]$entry.ServiceName
+            FirstRelative = [string]$entry.DefaultRelative
+        })
+    }
+
+    return ,@($components)
+}
+
+function Read-InteractiveMenuChoice {
+    param(
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [Parameter(Mandatory = $true)][string[]]$ValidChoices,
+        [Parameter(Mandatory = $true)][string]$DefaultChoice
+    )
+
+    while ($true) {
+        $answer = Read-Host ("{0} [{1}]" -f $Prompt, $DefaultChoice)
+        if ([string]::IsNullOrWhiteSpace($answer)) { return $DefaultChoice }
+
+        $answer = ([string]$answer).Trim()
+        if ($ValidChoices -contains $answer) { return $answer }
+
+        Write-Warning ("Enter {0}." -f ($ValidChoices -join ' or '))
+    }
+}
+
+# Asks for the server list when -Interactive runs without -Server. Every name
+# goes through the same identity and Mailbox-role checks that -Server uses.
+# The raw names are returned; the normal target resolution then runs unchanged.
+function Read-InteractiveTargets {
+    param([Parameter(Mandatory = $true)][string]$DefaultServer)
+
+    while ($true) {
+        Write-Host ''
+        $inputValue = Read-Host ("Server(s), comma-separated (Enter = {0})" -f $DefaultServer)
+
+        $rawNames = @($DefaultServer)
+        if (-not [string]::IsNullOrWhiteSpace($inputValue)) {
+            $rawNames = @(([string]$inputValue).Split(',') | ForEach-Object { ([string]$_).Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        }
+
+        if ($rawNames.Count -eq 0) {
+            Write-Warning 'Enter at least one Exchange server name.'
+            continue
+        }
+
+        $problems = New-Object System.Collections.ArrayList
+        $duplicateRawName = Get-DuplicateName -Names $rawNames
+        if ($null -ne $duplicateRawName) {
+            [void]$problems.Add(("Server '{0}' was entered more than once." -f $duplicateRawName))
+        }
+
+        $seenKeys = @{}
+        $validNames = New-Object System.Collections.ArrayList
+        foreach ($rawName in $rawNames) {
+            $identity = $null
+            try {
+                $identity = Assert-MailboxRoleServer -Server $rawName
+            }
+            catch {
+                [void]$problems.Add([string]$_.Exception.Message)
+                continue
+            }
+
+            $identityKey = [string]$identity.Key
+            if ($seenKeys.ContainsKey($identityKey)) {
+                if ($null -eq $duplicateRawName) {
+                    [void]$problems.Add(("'{0}' resolves to Exchange server '{1}', which is already in the list." -f $rawName, $identity.Name))
+                }
+                continue
+            }
+
+            $seenKeys[$identityKey] = $true
+            [void]$validNames.Add([string]$identity.Name)
+        }
+
+        if ($problems.Count -gt 0) {
+            foreach ($problem in @($problems)) { Write-Warning ([string]$problem) }
+            Write-Host 'Review the server name(s) and try again.' -ForegroundColor Yellow
+            continue
+        }
+
+        Write-Host ("Server validation passed: {0}" -f (@($validNames) -join ', ')) -ForegroundColor Green
+        return @($rawNames)
+    }
+}
+
+# Reads one log root. Validation and messages come from the same canonical
+# local path check that -LogRootPath uses; an invalid value asks again.
+function Read-InteractiveLogRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$ExampleRelative,
+        [switch]$AllowSkip
+    )
+
+    if ($AllowSkip) {
+        Write-Host '  Enter     : keep current values (Skip)' -ForegroundColor DarkGray
+    }
+
+    while ($true) {
+        $value = Read-Host '  Log root  '
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            if ($AllowSkip) { return $null }
+            Write-Warning 'Enter a log root, for example E:\EXCLOG.'
+            continue
+        }
+
+        $trimmedValue = ([string]$value).Trim()
+        $canonicalRoot = Resolve-CanonicalLocalPath -Path $trimmedValue -Label 'The log root'
+        if (-not $canonicalRoot.IsValid) {
+            Write-Warning ([string]$canonicalRoot.Reason)
+            continue
+        }
+
+        $root = [string]$canonicalRoot.Path
+        if (Test-DriveRootPath -Path $root) {
+            Show-DriveRootWarning -Root $root
+            if (-not (Read-DriveRootConfirmation -Indent '  ')) {
+                Write-Host 'Enter a different log root.' -ForegroundColor DarkCyan
+                continue
+            }
+        }
+
+        Write-Host ("  Generated : {0}" -f (Join-PathText -Root $root -Relative $ExampleRelative)) -ForegroundColor DarkCyan
+        return $root
+    }
+}
+
+# Current values of one component for every target server, in the Review
+# layout. Only the settings that the component can move are shown.
+function Show-InteractiveCurrentValues {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][array]$Snapshots,
+        [Parameter(Mandatory = $true)][string]$ServiceKey,
+        [Parameter(Mandatory = $true)][string]$ServiceName
+    )
+
+    $snapshotList = @($Snapshots)
+    $labelWidth = 9
+    foreach ($snapshot in $snapshotList) {
+        if (([string]$snapshot.Server).Length -gt $labelWidth) { $labelWidth = ([string]$snapshot.Server).Length }
+    }
+
+    $lines = New-Object System.Collections.ArrayList
+    foreach ($headerLine in (New-ComponentHeaderLines -Name $ServiceName)) { [void]$lines.Add($headerLine) }
+    [void]$lines.Add((New-ResultLine -Text ''))
+    [void]$lines.Add((New-ResultLine -Text 'Current values:' -Color 'DarkCyan'))
+
+    foreach ($entry in @($script:LogPathMap | Where-Object { $_.MoveInLogRootMode -and [string]$_.ServiceKey -eq $ServiceKey })) {
+        $settingId = "{0}.{1}" -f $entry.ServiceKey, $entry.Property
+        [void]$lines.Add((New-ResultLine -Text ''))
+        [void]$lines.Add((New-ResultLine -Text ([string]$entry.Property) -Color 'White'))
+
+        foreach ($snapshot in $snapshotList) {
+            $item = Get-SnapshotItem -Snapshot $snapshot -SettingId $settingId
+            $serverName = [string]$snapshot.Server
+
+            if (-not $item.Available) {
+                [void]$lines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label $serverName -Value '<Unable to Read>' -Width $labelWidth) -Color 'Red'))
+                if (-not [string]::IsNullOrWhiteSpace($item.UnavailableReason)) {
+                    [void]$lines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Reason' -Value ([string]$item.UnavailableReason) -Width $labelWidth -Detail) -Color 'Red'))
+                }
+                continue
+            }
+
+            $valueText = "{0}  ({1})" -f (ConvertTo-DisplayPath -Path $item.CurrentPath), $item.Classification
+            [void]$lines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label $serverName -Value $valueText -Width $labelWidth) -Color (Get-ClassificationColor -Classification $item.Classification)))
+        }
+    }
+
+    foreach ($line in @($lines)) { Write-ConsoleLine -Line $line }
+}
+
+# Collects the component-to-root selection once. Returns $null when every
+# component was skipped.
+function Read-InteractiveSelection {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][array]$Snapshots)
+
+    $components = Get-InteractiveComponents
+
+    Write-Host ''
+    Write-Host 'Choose how to configure transport log paths:' -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  1. Common Log Root Path'
+    Write-Host '     Enter one log root. Message tracking, connectivity, SMTP Receive,' -ForegroundColor DarkGray
+    Write-Host '     and SMTP Send logs of all three transport components are placed' -ForegroundColor DarkGray
+    Write-Host '     below it. The Exchange folder structure below V15 is kept.' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host '  2. Advanced per-component configuration'
+    Write-Host '     Shows the current values for every server. For each component,' -ForegroundColor DarkGray
+    Write-Host '     choose a log root or Skip.' -ForegroundColor DarkGray
+    Write-Host ''
+    Write-Host 'Note: Pipeline tracing paths are Review Only and are never changed.' -ForegroundColor DarkYellow
+    Write-Host ''
+    $style = Read-InteractiveMenuChoice -Prompt 'Select configuration method' -ValidChoices @('1', '2') -DefaultChoice '1'
+
+    $roots = [ordered]@{}
+    $commonRoot = $null
+
+    if ($style -eq '1') {
+        Write-Host ''
+        Write-Host '[Common Log Root Path]' -ForegroundColor Cyan
+        Write-Host 'Enter a local absolute path, for example E:\EXCLOG.' -ForegroundColor DarkGray
+        Write-Host 'The Exchange folder structure below V15 is kept below this root.' -ForegroundColor DarkGray
+        Write-Host ''
+        $commonRoot = Read-InteractiveLogRoot -ExampleRelative ([string]$components[0].FirstRelative)
+        foreach ($component in $components) {
+            $roots[[string]$component.ServiceKey] = $commonRoot
+        }
+    }
+    else {
+        foreach ($component in $components) {
+            Show-InteractiveCurrentValues -Snapshots $Snapshots -ServiceKey ([string]$component.ServiceKey) -ServiceName ([string]$component.ServiceName)
+
+            Write-Host ''
+            Write-Host 'Change:'
+            Write-Host ("  1. Set a new log root for {0}" -f $component.ServiceName)
+            Write-Host '  2. Skip'
+            $choice = Read-InteractiveMenuChoice -Prompt 'Select' -ValidChoices @('1', '2') -DefaultChoice '2'
+
+            $componentRoot = $null
+            if ($choice -eq '1') {
+                Write-Host ''
+                Write-Host ("New log root for {0}" -f $component.ServiceName) -ForegroundColor Cyan
+                $componentRoot = Read-InteractiveLogRoot -ExampleRelative ([string]$component.FirstRelative) -AllowSkip
+            }
+
+            $roots[[string]$component.ServiceKey] = $componentRoot
+        }
+    }
+
+    $nameWidth = 0
+    foreach ($component in $components) {
+        if (([string]$component.ServiceName).Length -gt $nameWidth) { $nameWidth = ([string]$component.ServiceName).Length }
+    }
+
+    Write-Host ''
+    Write-Host 'Selected configuration' -ForegroundColor Cyan
+    $selectedParts = New-Object System.Collections.ArrayList
+    foreach ($component in $components) {
+        $componentRoot = $roots[[string]$component.ServiceKey]
+        if ([string]::IsNullOrWhiteSpace([string]$componentRoot)) {
+            Write-Host ("  {0} : Skip" -f ([string]$component.ServiceName).PadRight($nameWidth)) -ForegroundColor DarkGray
+            continue
+        }
+
+        Write-Host ("  {0} : {1}" -f ([string]$component.ServiceName).PadRight($nameWidth), $componentRoot)
+        [void]$selectedParts.Add(("{0} = {1}" -f $component.ServiceName, $componentRoot))
+    }
+
+    if ($selectedParts.Count -eq 0) { return $null }
+
+    $styleName = 'Advanced'
+    $displayText = (@($selectedParts) -join '; ')
+    if ($style -eq '1') {
+        $styleName = 'Common'
+        $displayText = [string]$commonRoot
+    }
+
+    return [PSCustomObject]@{
+        Style       = $styleName
+        CommonRoot  = $commonRoot
+        Roots       = $roots
+        DisplayText = $displayText
+    }
+}
+
+# Builds the desired configuration of one target from the Interactive
+# selection. Every selected root is planned by the unchanged Log Root planner;
+# only the rows of the components assigned to that root are kept.
+function New-InteractiveDesiredConfiguration {
+    param(
+        [Parameter(Mandatory = $true)]$TargetSnapshot,
+        [Parameter(Mandatory = $true)]$Selection
+    )
+
+    $plannedByRoot = @{}
+    $desiredItems = New-Object System.Collections.ArrayList
+
+    foreach ($serviceKey in @($Selection.Roots.Keys)) {
+        $root = [string]$Selection.Roots[[string]$serviceKey]
+        if ([string]::IsNullOrWhiteSpace($root)) { continue }
+
+        $rootKey = $root.ToUpperInvariant()
+        if (-not $plannedByRoot.ContainsKey($rootKey)) {
+            $plannedByRoot[$rootKey] = New-LogRootDesiredConfiguration -TargetSnapshot $TargetSnapshot -Root $root
+        }
+
+        foreach ($desiredItem in @($plannedByRoot[$rootKey].Items | Where-Object { [string]$_.ServiceKey -eq [string]$serviceKey })) {
+            [void]$desiredItems.Add($desiredItem)
+        }
     }
 
     return [PSCustomObject]@{
@@ -2342,6 +2849,59 @@ function Get-ReportHeaderBlock {
     return ,@($lines)
 }
 
+# Shared label formatting for the grouped report layout. Server lines use a
+# two-space indent; detail lines use a four-space indent with a label two
+# characters shorter, so every colon in a setting block lines up.
+function Format-ReportLabelLine {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [AllowNull()][string]$Value,
+        [Parameter(Mandatory = $true)][int]$Width,
+        [switch]$Detail
+    )
+
+    if ($Detail) {
+        return ("    {0} : {1}" -f $Label.PadRight([Math]::Max(0, $Width - 2)), $Value)
+    }
+    return ("  {0} : {1}" -f $Label.PadRight($Width), $Value)
+}
+
+function New-ComponentHeaderLines {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $lines = New-Object System.Collections.ArrayList
+    [void]$lines.Add((New-ResultLine -Text ''))
+    [void]$lines.Add((New-ResultLine -Text ('#' * 78) -Color 'Cyan'))
+    [void]$lines.Add((New-ResultLine -Text ("# {0}" -f $Name) -Color 'Cyan'))
+    [void]$lines.Add((New-ResultLine -Text ('#' * 78) -Color 'Cyan'))
+    return ,@($lines)
+}
+
+# Policy is shown at setting level only for Review Only settings, matching the
+# ExchangeURLManager.ps1 comparison layout.
+function Add-ReviewOnlyPolicyLines {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.ArrayList]$Lines,
+        [AllowNull()][string]$Policy,
+        [AllowNull()][string]$ReviewReason,
+        [Parameter(Mandatory = $true)][int]$Width
+    )
+
+    if ([string]$Policy -eq 'Apply') { return }
+
+    [void]$Lines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Policy' -Value (Get-PolicyDisplayText -Policy $Policy) -Width $Width) -Color 'Cyan'))
+
+    # Policy already says Review Only, so the reason is shown without repeating
+    # that prefix.
+    $reviewText = [string]$ReviewReason
+    if ($reviewText.StartsWith('Review Only. ')) { $reviewText = $reviewText.Substring(13) }
+    if (-not [string]::IsNullOrWhiteSpace($reviewText)) {
+        [void]$Lines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Review' -Value $reviewText -Width $Width) -Color 'Cyan'))
+    }
+}
+
+# Review output is grouped by component, then setting, then server, so the
+# same setting on several servers is shown on adjacent lines.
 function Get-SnapshotReportBlocks {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][array]$Snapshots,
@@ -2349,46 +2909,66 @@ function Get-SnapshotReportBlocks {
     )
 
     $blocks = New-Object System.Collections.ArrayList
+    $snapshotList = @($Snapshots)
+    $serverNames = @($snapshotList | ForEach-Object { [string]$_.Server })
+
     Add-ReportBlock -Blocks $blocks -KeepWithNext -Lines (Get-ReportHeaderBlock -Title $Title -Details @(
         ("Script  : {0}.ps1  Version {1}" -f $script:ScriptBaseName, $script:ScriptVersion),
         ("Run time: {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')),
-        'Changes : NONE. This view only reads the current configuration.'
+        'Changes : NONE. This view only reads the current configuration.',
+        ("Servers : {0}" -f ($serverNames -join ', '))
     ))
 
-    foreach ($snapshot in $Snapshots) {
-        $serverLines = New-Object System.Collections.ArrayList
-        [void]$serverLines.Add((New-ResultLine -Text ''))
-        [void]$serverLines.Add((New-ResultLine -Text ("Server                : {0}" -f $snapshot.Server) -Color 'Yellow'))
-        [void]$serverLines.Add((New-ResultLine -Text ("Exchange install path : {0}" -f (ConvertTo-DisplayPath -Path $snapshot.InstallPath)) -Color 'DarkGray'))
-        Add-ReportBlock -Blocks $blocks -Lines $serverLines -KeepWithNext
+    if ($snapshotList.Count -eq 0) { return ,@($blocks) }
 
-        foreach ($serviceName in @($snapshot.Items | ForEach-Object { $_.ServiceName } | Select-Object -Unique)) {
-            $serviceLines = New-Object System.Collections.ArrayList
-            [void]$serviceLines.Add((New-ResultLine -Text ''))
-            [void]$serviceLines.Add((New-ResultLine -Text ("  {0}" -f $serviceName) -Color 'Cyan'))
-            Add-ReportBlock -Blocks $blocks -Lines $serviceLines -KeepWithNext
+    # One label width per report: the longest server name, or the longest
+    # detail label (Default) plus its extra indent.
+    $labelWidth = 9
+    foreach ($name in $serverNames) {
+        if ($name.Length -gt $labelWidth) { $labelWidth = $name.Length }
+    }
 
-            foreach ($item in @($snapshot.Items | Where-Object { $_.ServiceName -eq $serviceName })) {
-                $itemLines = New-Object System.Collections.ArrayList
-                [void]$itemLines.Add((New-ResultLine -Text ("    {0}" -f $item.Property)))
-                [void]$itemLines.Add((New-ResultLine -Text ("      Current        : {0}" -f (ConvertTo-DisplayPath -Path $item.CurrentPath))))
-                [void]$itemLines.Add((New-ResultLine -Text ("      Classification : {0}" -f $item.Classification) -Color (Get-ClassificationColor -Classification $item.Classification)))
-                [void]$itemLines.Add((New-ResultLine -Text ("      Default        : {0}" -f (ConvertTo-DisplayPath -Path $item.DefaultPath)) -Color 'DarkGray'))
-                [void]$itemLines.Add((New-ResultLine -Text ("      Policy         : {0}" -f (Get-PolicyDisplayText -Policy $item.Policy)) -Color 'DarkGray'))
+    $installLines = New-Object System.Collections.ArrayList
+    [void]$installLines.Add((New-ResultLine -Text ''))
+    [void]$installLines.Add((New-ResultLine -Text 'Exchange install path' -Color 'Cyan'))
+    foreach ($snapshot in $snapshotList) {
+        [void]$installLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label ([string]$snapshot.Server) -Value (ConvertTo-DisplayPath -Path $snapshot.InstallPath) -Width $labelWidth) -Color 'DarkGray'))
+    }
+    Add-ReportBlock -Blocks $blocks -Lines $installLines
 
-                if ($item.Policy -ne 'Apply' -and -not [string]::IsNullOrWhiteSpace($item.ReviewReason)) {
-                    # Policy already says Review Only, so the reason is shown without
-                    # repeating that prefix.
-                    $reviewText = [string]$item.ReviewReason
-                    if ($reviewText.StartsWith('Review Only. ')) { $reviewText = $reviewText.Substring(13) }
-                    [void]$itemLines.Add((New-ResultLine -Text ("      Review         : {0}" -f $reviewText) -Color 'Cyan'))
+    # Every snapshot is built from the same log path map, so the first one
+    # provides the component and setting order for all servers.
+    $settingTemplates = @($snapshotList[0].Items)
+    foreach ($serviceName in @($settingTemplates | ForEach-Object { [string]$_.ServiceName } | Select-Object -Unique)) {
+        Add-ReportBlock -Blocks $blocks -KeepWithNext -Lines (New-ComponentHeaderLines -Name $serviceName)
+
+        foreach ($template in @($settingTemplates | Where-Object { [string]$_.ServiceName -eq $serviceName })) {
+            $itemLines = New-Object System.Collections.ArrayList
+            [void]$itemLines.Add((New-ResultLine -Text ''))
+            [void]$itemLines.Add((New-ResultLine -Text ([string]$template.Property) -Color 'White'))
+            Add-ReviewOnlyPolicyLines -Lines $itemLines -Policy ([string]$template.Policy) -ReviewReason ([string]$template.ReviewReason) -Width $labelWidth
+
+            foreach ($snapshot in $snapshotList) {
+                $item = Get-SnapshotItem -Snapshot $snapshot -SettingId ([string]$template.SettingId)
+                $serverName = [string]$snapshot.Server
+
+                if (-not $item.Available) {
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label $serverName -Value '<Unable to Read>' -Width $labelWidth) -Color 'Red'))
+                    if (-not [string]::IsNullOrWhiteSpace($item.UnavailableReason)) {
+                        [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Reason' -Value ([string]$item.UnavailableReason) -Width $labelWidth -Detail) -Color 'Red'))
+                    }
+                    continue
                 }
-                if (-not [string]::IsNullOrWhiteSpace($item.UnavailableReason)) {
-                    [void]$itemLines.Add((New-ResultLine -Text ("      Unavailable    : {0}" -f $item.UnavailableReason) -Color 'Red'))
-                }
 
-                Add-ReportBlock -Blocks $blocks -Lines $itemLines
+                $valueText = "{0}  ({1})" -f (ConvertTo-DisplayPath -Path $item.CurrentPath), $item.Classification
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label $serverName -Value $valueText -Width $labelWidth) -Color (Get-ClassificationColor -Classification $item.Classification)))
+
+                if ([string]$item.Classification -eq 'Custom') {
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Default' -Value (ConvertTo-DisplayPath -Path $item.DefaultPath) -Width $labelWidth -Detail) -Color 'DarkGray'))
+                }
             }
+
+            Add-ReportBlock -Blocks $blocks -Lines $itemLines
         }
     }
 
@@ -2416,7 +2996,6 @@ function Get-ReviewFailureReportBlocks {
         [void]$failureLines.Add((New-ResultLine -Text ("    {0}" -f $failure.Message) -Color 'Red'))
         Add-ReportBlock -Blocks $blocks -Lines $failureLines
     }
-
     return ,@($blocks)
 }
 
@@ -2429,7 +3008,8 @@ function Get-ProposalReportBlocks {
         [AllowNull()][string]$SourceServerName,
         [AllowNull()][string]$LogRootPathValue,
         [switch]$ApplyRequested,
-        [switch]$ForExport
+        [switch]$ForExport,
+        [AllowNull()][string[]]$ExportApplyHint
     )
 
     $blocks = New-Object System.Collections.ArrayList
@@ -2451,45 +3031,88 @@ function Get-ProposalReportBlocks {
 
     Add-ReportBlock -Blocks $blocks -KeepWithNext -Lines (Get-ReportHeaderBlock -Title 'Proposed log path configuration' -Details @($details))
 
+    # Grouped by component, then setting, then server. In Clone mode the source
+    # server is shown first. A target that already matches the proposal shows
+    # only its Status; every other target shows the full proposal detail.
+    $comparisonList = @($Comparisons)
+    $isClone = -not [string]::IsNullOrWhiteSpace($SourceServerName)
+    $sourceLabel = $null
+
+    # One label width per report: the longest server label, or the longest
+    # detail label (Proposed) plus its extra indent.
+    $labelWidth = 10
+    if ($isClone) {
+        $sourceLabel = ("{0} (source)" -f $SourceServerName)
+        if ($sourceLabel.Length -gt $labelWidth) { $labelWidth = $sourceLabel.Length }
+    }
     foreach ($target in $Targets) {
-        $targetComparisons = @($Comparisons | Where-Object { $_.Target -eq $target })
+        if (([string]$target).Length -gt $labelWidth) { $labelWidth = ([string]$target).Length }
+    }
 
-        $targetLines = New-Object System.Collections.ArrayList
-        [void]$targetLines.Add((New-ResultLine -Text ''))
-        [void]$targetLines.Add((New-ResultLine -Text ("Target server : {0}" -f $target) -Color 'Yellow'))
-        Add-ReportBlock -Blocks $blocks -Lines $targetLines -KeepWithNext
+    foreach ($serviceName in @($comparisonList | ForEach-Object { [string]$_.ServiceName } | Select-Object -Unique)) {
+        Add-ReportBlock -Blocks $blocks -KeepWithNext -Lines (New-ComponentHeaderLines -Name $serviceName)
+        $serviceComparisons = @($comparisonList | Where-Object { [string]$_.ServiceName -eq $serviceName })
 
-        if ($targetComparisons.Count -eq 0) {
-            Add-ReportBlock -Blocks $blocks -Lines @((New-ResultLine -Text '  No managed settings were evaluated for this server.' -Color 'DarkGray'))
-            continue
-        }
+        foreach ($property in @($serviceComparisons | ForEach-Object { [string]$_.Property } | Select-Object -Unique)) {
+            $settingComparisons = @($serviceComparisons | Where-Object { [string]$_.Property -eq $property })
+            $first = $settingComparisons[0]
 
-        foreach ($comparison in $targetComparisons) {
+            $reviewReason = $null
+            $mapEntries = @($script:LogPathMap | Where-Object { [string]$_.ServiceKey -eq [string]$first.ServiceKey -and [string]$_.Property -eq $property })
+            if ($mapEntries.Count -gt 0) { $reviewReason = Get-ObjectPropertyValue -InputObject $mapEntries[0] -Name 'ReviewReason' }
+
             $itemLines = New-Object System.Collections.ArrayList
             [void]$itemLines.Add((New-ResultLine -Text ''))
-            [void]$itemLines.Add((New-ResultLine -Text ("  [{0}] {1}" -f $comparison.ServiceName, $comparison.Property) -Color 'Cyan'))
+            [void]$itemLines.Add((New-ResultLine -Text $property -Color 'White'))
+            Add-ReviewOnlyPolicyLines -Lines $itemLines -Policy ([string]$first.Policy) -ReviewReason ([string]$reviewReason) -Width $labelWidth
 
-            if (-not [string]::IsNullOrWhiteSpace($SourceServerName)) {
-                [void]$itemLines.Add((New-ResultLine -Text ("    Source   : {0}  ({1})" -f (ConvertTo-DisplayPath -Path $comparison.SourcePath), $comparison.SourceClassification)))
+            if ($isClone) {
+                $sourceValue = ConvertTo-DisplayPath -Path $first.SourcePath
+                if ([string]$first.SourceClassification -eq 'Unavailable') { $sourceValue = '<Unable to Read>' }
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label $sourceLabel -Value ("{0}  ({1})" -f $sourceValue, $first.SourceClassification) -Width $labelWidth) -Color (Get-ClassificationColor -Classification $first.SourceClassification)))
             }
 
-            [void]$itemLines.Add((New-ResultLine -Text ("    Current  : {0}  ({1})" -f (ConvertTo-DisplayPath -Path $comparison.CurrentPath), $comparison.CurrentClassification)))
-            [void]$itemLines.Add((New-ResultLine -Text ("    Proposed : {0}" -f (ConvertTo-DisplayPath -Path $comparison.ProposedPath))))
-            [void]$itemLines.Add((New-ResultLine -Text ("    Status   : {0}" -f $comparison.Status) -Color (Get-StatusColor -Status $comparison.Status)))
-            [void]$itemLines.Add((New-ResultLine -Text ("    Mapping  : {0}" -f $comparison.Mapping) -Color 'DarkGray'))
+            foreach ($target in $Targets) {
+                $targetRows = @($settingComparisons | Where-Object { [string]$_.Target -eq [string]$target })
+                if ($targetRows.Count -eq 0) { continue }
+                $comparison = $targetRows[0]
 
-            $driveText = Get-DriveDisplayText -Item $comparison
-            if (-not [string]::IsNullOrWhiteSpace($driveText)) {
-                $driveColor = 'DarkGray'
-                if ($comparison.DriveStatus -ne 'Available') { $driveColor = 'Red' }
-                [void]$itemLines.Add((New-ResultLine -Text ("    Drive    : {0}" -f $driveText) -Color $driveColor))
-            }
+                $currentValue = ConvertTo-DisplayPath -Path $comparison.CurrentPath
+                if ([string]$comparison.CurrentClassification -eq 'Unavailable') { $currentValue = '<Unable to Read>' }
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label ([string]$target) -Value ("{0}  ({1})" -f $currentValue, $comparison.CurrentClassification) -Width $labelWidth) -Color (Get-ClassificationColor -Classification $comparison.CurrentClassification)))
 
-            if (-not [string]::IsNullOrWhiteSpace($comparison.ReviewNote)) {
-                [void]$itemLines.Add((New-ResultLine -Text ("    Note     : {0}" -f $comparison.ReviewNote) -Color 'Cyan'))
-            }
-            if (-not [string]::IsNullOrWhiteSpace($comparison.TargetPathNote)) {
-                [void]$itemLines.Add((New-ResultLine -Text ("    Note     : {0}" -f $comparison.TargetPathNote) -Color 'Red'))
+                if ([string]$comparison.Status -eq 'Same') {
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Status' -Value 'Same' -Width $labelWidth -Detail) -Color (Get-StatusColor -Status 'Same')))
+
+                    # Same rows stay compact (no Proposed or Mapping), but a drive
+                    # or target path warning is never hidden.
+                    $sameDriveText = Get-DriveDisplayText -Item $comparison
+                    if (-not [string]::IsNullOrWhiteSpace($sameDriveText) -and [string]$comparison.DriveStatus -ne 'Available') {
+                        [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Drive' -Value $sameDriveText -Width $labelWidth -Detail) -Color 'Red'))
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($comparison.TargetPathNote)) {
+                        [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Note' -Value ([string]$comparison.TargetPathNote) -Width $labelWidth -Detail) -Color 'Red'))
+                    }
+                    continue
+                }
+
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Proposed' -Value (ConvertTo-DisplayPath -Path $comparison.ProposedPath) -Width $labelWidth -Detail)))
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Status' -Value ([string]$comparison.Status) -Width $labelWidth -Detail) -Color (Get-StatusColor -Status $comparison.Status)))
+                [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Mapping' -Value ([string]$comparison.Mapping) -Width $labelWidth -Detail) -Color 'DarkGray'))
+
+                $driveText = Get-DriveDisplayText -Item $comparison
+                if (-not [string]::IsNullOrWhiteSpace($driveText)) {
+                    $driveColor = 'DarkGray'
+                    if ($comparison.DriveStatus -ne 'Available') { $driveColor = 'Red' }
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Drive' -Value $driveText -Width $labelWidth -Detail) -Color $driveColor))
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($comparison.ReviewNote)) {
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Note' -Value ([string]$comparison.ReviewNote) -Width $labelWidth -Detail) -Color 'Cyan'))
+                }
+                if (-not [string]::IsNullOrWhiteSpace($comparison.TargetPathNote)) {
+                    [void]$itemLines.Add((New-ResultLine -Text (Format-ReportLabelLine -Label 'Note' -Value ([string]$comparison.TargetPathNote) -Width $labelWidth -Detail) -Color 'Red'))
+                }
             }
 
             Add-ReportBlock -Blocks $blocks -Lines $itemLines
@@ -2535,7 +3158,14 @@ function Get-ProposalReportBlocks {
     }
     elseif ($operationCount -gt 0 -and $ForExport) {
         [void]$footerLines.Add((New-ResultLine -Text ''))
-        [void]$footerLines.Add((New-ResultLine -Text 'No changes were made. To apply this proposal, run the same command with -ApplyChanges and without -OutputFile.' -Color 'Green'))
+        if ($null -ne $ExportApplyHint -and @($ExportApplyHint).Count -gt 0) {
+            foreach ($hintLine in @($ExportApplyHint)) {
+                [void]$footerLines.Add((New-ResultLine -Text ([string]$hintLine) -Color 'Green'))
+            }
+        }
+        else {
+            [void]$footerLines.Add((New-ResultLine -Text 'No changes were made. To apply this proposal, run the same command with -ApplyChanges and without -OutputFile.' -Color 'Green'))
+        }
     }
     if ($footerLines.Count -gt 0) {
         Add-ReportBlock -Blocks $blocks -Lines $footerLines
@@ -2674,10 +3304,10 @@ function Show-Verification {
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-# Set before try. $interactive drives the startup prompt and paging;
+# Set before try. $isInteractiveHost drives the startup prompt and paging;
 # ApplyStarted lets the catch block decide whether the "no changes" line is
 # accurate.
-$interactive = Test-InteractiveHost
+$isInteractiveHost = Test-InteractiveHost
 $script:ApplyStarted = $false
 
 try {
@@ -2685,11 +3315,15 @@ try {
     $script:ApplyIntent = ([bool]$ApplyChanges -and -not $script:OutputFileRequested)
 
     $parameterSetName = [string]$PSCmdlet.ParameterSetName
-    if ($parameterSetName -ne 'Review' -and $parameterSetName -ne 'LogRoot' -and $parameterSetName -ne 'Reference') {
+    if ($parameterSetName -ne 'Review' -and $parameterSetName -ne 'LogRoot' -and $parameterSetName -ne 'Clone' -and $parameterSetName -ne 'Interactive') {
         throw ("BLOCKER: Unsupported parameter combination (parameter set '{0}')." -f $parameterSetName)
     }
 
-    Show-StartupBanner -ParameterSetName $parameterSetName -Apply:$script:ApplyIntent
+    Show-StartupBanner -ParameterSetName $parameterSetName -Apply:$script:ApplyIntent -CommandExport:$script:OutputFileRequested
+
+    if ($parameterSetName -eq 'Interactive' -and -not $isInteractiveHost) {
+        throw 'BLOCKER: -Interactive requires an interactive console. Run the script in an interactive PowerShell session, or use -LogRootPath for an unattended run.'
+    }
 
     # -OutputFile always wins over -ApplyChanges. The operator is told clearly
     # that the run has become read-only.
@@ -2704,10 +3338,12 @@ try {
         Initialize-OutputFileDirectory -OutputTarget $outputTarget
     }
 
-    # Reference mode takes its targets from -TargetServer. Review and Log Root
-    # mode take them from -Server and fall back to the local computer.
+    # Clone mode takes its targets from -TargetServer. Review, Log Root, and
+    # Interactive mode take them from -Server and fall back to the local
+    # computer. Interactive mode without -Server asks for the list later.
+    $interactiveServerPrompt = ($parameterSetName -eq 'Interactive' -and -not ($null -ne $Server -and @($Server).Count -gt 0))
     $requestedTargets = $null
-    if ($parameterSetName -eq 'Reference') {
+    if ($parameterSetName -eq 'Clone') {
         $requestedTargets = Get-RequestedServerName -Servers $TargetServer
     }
     elseif ($null -ne $Server -and @($Server).Count -gt 0) {
@@ -2727,9 +3363,9 @@ try {
         }
     }
 
-    if ($parameterSetName -eq 'Reference') {
+    if ($parameterSetName -eq 'Clone') {
         if ([string]::IsNullOrWhiteSpace($SourceServer)) {
-            throw 'BLOCKER: -SourceServer is required when comparing against a reference server.'
+            throw 'BLOCKER: -SourceServer is required when comparing against a source server.'
         }
 
         $sourceRawName = $SourceServer.Trim()
@@ -2752,12 +3388,27 @@ try {
         }
 
         $logRootCanonicalPath = [string]$canonicalRoot.Path
-        if ($logRootCanonicalPath -match '^[A-Za-z]:\\?$') {
-            Write-StatusHost -Text ("NOTICE: -LogRootPath '{0}' is a bare drive root. The proposed layout places the Exchange-relative log structure directly below the drive root, for example {1}." -f $logRootCanonicalPath, (Join-PathText -Root $logRootCanonicalPath -Relative 'TransportRoles\Logs\MessageTracking')) -ForegroundColor Yellow
+        if (Test-DriveRootPath -Path $logRootCanonicalPath) {
+            Show-DriveRootWarning -Root $logRootCanonicalPath -Prefix '-LogRootPath '
+
+            # Separate safety gate before a real Apply. -Confirm is not read
+            # here: -Confirm:$false skips only ShouldProcess. Read-only runs
+            # (Preview, -OutputFile, -WhatIf) show the WARNING only.
+            if ($script:ApplyIntent -and -not $WhatIfPreference) {
+                if (-not $isInteractiveHost) {
+                    throw ("BLOCKER: -LogRootPath '{0}' is a drive root. A real Apply with a drive root needs an interactive confirmation. Use a folder such as {1}\EXCLOG, or run the script in an interactive PowerShell session." -f $logRootCanonicalPath, $logRootCanonicalPath.Substring(0, 2).ToUpperInvariant())
+                }
+
+                if (-not (Read-DriveRootConfirmation)) {
+                    Write-Host ''
+                    Write-Host 'Exiting. No changes were made.' -ForegroundColor DarkCyan
+                    return
+                }
+            }
         }
     }
 
-    if ($interactive -and -not $script:OutputFileRequested) {
+    if ($isInteractiveHost -and -not $script:OutputFileRequested) {
         if (-not (Read-StartupConfirmation)) {
             # Clean exit before the Exchange Management Shell is loaded.
             Write-Host ''
@@ -2766,12 +3417,17 @@ try {
         }
     }
 
-    Initialize-ResultPaging -Disabled:([bool]$NoPaging -or $script:OutputFileRequested) -Interactive:$interactive
+    Initialize-ResultPaging -Disabled:([bool]$NoPaging -or $script:OutputFileRequested) -Interactive:$isInteractiveHost
 
     Write-StatusHost -Text ''
     Write-StatusHost -Text 'Connecting to the Exchange Management Shell...' -ForegroundColor DarkCyan
     . Initialize-ExchangeShell
     Initialize-ExchangeCapability -Map $script:LogPathMap
+
+    if ($interactiveServerPrompt) {
+        $requestedTargets = Read-InteractiveTargets -DefaultServer ([string]$env:COMPUTERNAME)
+        Write-StatusHost -Text ''
+    }
 
     Write-StatusHost -Text 'Reading current Exchange values... This may take a while. Please wait.' -ForegroundColor DarkCyan
 
@@ -2814,7 +3470,7 @@ try {
 
     $sourceIdentity = $null
     $sourceName = $null
-    if ($parameterSetName -eq 'Reference') {
+    if ($parameterSetName -eq 'Clone') {
         $sourceIdentity = Assert-MailboxRoleServer -Server $SourceServer
         $sourceName = [string]$sourceIdentity.Name
 
@@ -2878,6 +3534,24 @@ try {
         return
     }
 
+    # Interactive mode collects the component-to-root selection once, after
+    # the current values were read. The same selection object is reused
+    # unchanged for the pre-Apply drift re-plan; nothing is asked again.
+    if ($parameterSetName -eq 'Interactive') {
+        $script:InteractiveSelection = Read-InteractiveSelection -Snapshots $targetSnapshotList
+        if ($null -eq $script:InteractiveSelection) {
+            Write-StatusHost -Text ''
+            Write-StatusHost -Text 'No components were selected. No Exchange configuration changes were made.' -ForegroundColor Yellow
+            Show-CompletionFooter
+            return
+        }
+
+        # The selection dialog is not part of the paged report, so the
+        # Preview starts with a fresh page.
+        $script:PagingLineCount = 0
+        Write-StatusHost -Text ''
+    }
+
     # -----------------------------------------------------------------------
     # Change modes. Build the desired state, compare, and preview.
     # -----------------------------------------------------------------------
@@ -2885,6 +3559,9 @@ try {
     foreach ($snapshot in $targetSnapshotList) {
         if ($parameterSetName -eq 'LogRoot') {
             [void]$desiredConfigurations.Add((New-LogRootDesiredConfiguration -TargetSnapshot $snapshot -Root $logRootCanonicalPath))
+        }
+        elseif ($parameterSetName -eq 'Interactive') {
+            [void]$desiredConfigurations.Add((New-InteractiveDesiredConfiguration -TargetSnapshot $snapshot -Selection $script:InteractiveSelection))
         }
         else {
             [void]$desiredConfigurations.Add((New-ReferenceDesiredConfiguration -SourceSnapshot $sourceSnapshot -TargetSnapshot $snapshot))
@@ -2908,16 +3585,36 @@ try {
 
     Write-StatusHost -Text 'Preparing Preview...' -ForegroundColor DarkCyan
 
-    $modeInfo = Get-ModeInfo -ParameterSetName $parameterSetName -Apply:$script:ApplyIntent
+    $proposalRootText = $logRootCanonicalPath
+    $interactiveApplyCommand = $null
+    $exportApplyHint = $null
+    if ($parameterSetName -eq 'Interactive') {
+        $proposalRootText = [string]$script:InteractiveSelection.DisplayText
+
+        if ([string]$script:InteractiveSelection.Style -eq 'Common') {
+            # Common Log Root Path is exactly the -LogRootPath plan, so the
+            # equivalent command line can be shown.
+            $scriptFileName = [System.IO.Path]::GetFileName([string]$PSCommandPath)
+            if ([string]::IsNullOrWhiteSpace($scriptFileName)) { $scriptFileName = "{0}.ps1" -f $script:ScriptBaseName }
+            $interactiveApplyCommand = "  .\{0} -Server {1} -LogRootPath {2} -ApplyChanges" -f $scriptFileName, (@($targetNames) -join ','), (ConvertTo-CommandLiteral -Value $script:InteractiveSelection.CommonRoot)
+            $exportApplyHint = @('No changes were made. To apply this proposal, run:', $interactiveApplyCommand)
+        }
+        else {
+            $exportApplyHint = @('No changes were made. To apply this proposal, run the script again with -Interactive -ApplyChanges and make the same selections.')
+        }
+    }
+
+    $modeInfo = Get-ModeInfo -ParameterSetName $parameterSetName -Apply:$script:ApplyIntent -CommandExport:$script:OutputFileRequested
     $proposalBlocks = Get-ProposalReportBlocks `
         -Comparisons $comparisonList `
         -Operations $operations `
         -Targets $targetNames `
         -ModeName ([string]$modeInfo.Mode) `
         -SourceServerName $sourceName `
-        -LogRootPathValue $logRootCanonicalPath `
+        -LogRootPathValue $proposalRootText `
         -ApplyRequested:$script:ApplyIntent `
-        -ForExport:$script:OutputFileRequested
+        -ForExport:$script:OutputFileRequested `
+        -ExportApplyHint $exportApplyHint
 
     if ($script:OutputFileRequested) {
         Export-TextReport -OutputTarget $outputTarget -Lines (ConvertTo-ReportTextLines -Blocks $proposalBlocks)
@@ -2965,7 +3662,16 @@ try {
 
     if (-not $script:ApplyIntent) {
         Write-StatusHost -Text ''
-        Write-StatusHost -Text 'Preview completed. To apply this proposal, re-run the same command with -ApplyChanges.' -ForegroundColor Green
+        if ($parameterSetName -eq 'Interactive' -and -not [string]::IsNullOrWhiteSpace($interactiveApplyCommand)) {
+            Write-StatusHost -Text 'Preview completed. To apply this proposal, run:' -ForegroundColor Green
+            Write-StatusHost -Text $interactiveApplyCommand -ForegroundColor Green
+        }
+        elseif ($parameterSetName -eq 'Interactive') {
+            Write-StatusHost -Text 'Preview completed. To apply this proposal, run the script again with -Interactive -ApplyChanges and make the same selections.' -ForegroundColor Green
+        }
+        else {
+            Write-StatusHost -Text 'Preview completed. To apply this proposal, re-run the same command with -ApplyChanges.' -ForegroundColor Green
+        }
         Write-StatusHost -Text 'No Exchange configuration changes were made.' -ForegroundColor DarkGray
         Show-CompletionFooter
         return
@@ -3019,6 +3725,9 @@ try {
         $driftDesired = $null
         if ($parameterSetName -eq 'LogRoot') {
             $driftDesired = New-LogRootDesiredConfiguration -TargetSnapshot $snapshot -Root $logRootCanonicalPath
+        }
+        elseif ($parameterSetName -eq 'Interactive') {
+            $driftDesired = New-InteractiveDesiredConfiguration -TargetSnapshot $snapshot -Selection $script:InteractiveSelection
         }
         else {
             $driftDesired = New-ReferenceDesiredConfiguration -SourceSnapshot $driftSourceSnapshot -TargetSnapshot $snapshot
