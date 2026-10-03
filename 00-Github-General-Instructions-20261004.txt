@@ -1,0 +1,129 @@
+00-Github-General-Instructions-20261004
+==========================================
+
+Purpose
+-------
+This document defines the general GitHub working rules for script repositories maintained in this project family.
+
+Scope
+-----
+These instructions apply to repository maintenance, release preparation, documentation, versioning, validation, tagging, and publication activities.
+Repository-specific technical rules remain in the relevant project notes, README, source code comments, and test records.
+
+1. Source of Truth
+------------------
+- The repository main branch contains the current development state.
+- A published GitHub Release must point to the exact commit intended for that release.
+- A release tag must never be moved after publication unless there is an exceptional and explicitly documented reason.
+- Do not silently rewrite published history.
+
+2. Change Discipline
+--------------------
+- Separate functional code changes from documentation-only or release-metadata changes whenever practical.
+- Do not introduce unrelated cleanup while preparing a release.
+- If a task is defined as metadata-only, code behavior must remain unchanged.
+- Keep diffs narrow and reviewable.
+- Do not modify validated safety behavior only for cosmetic alignment.
+
+3. Versioning
+-------------
+- User-facing version values must be consistent across the script, README, CHANGELOG, and GitHub Release.
+- Development file names may contain beta or rc identifiers.
+- Internal script version, banner, help, reports, and snapshots must show only the intended product version unless prerelease labeling is explicitly part of the design.
+- Release dates use the actual publication date.
+- CHANGELOG dates use ISO format: YYYY-MM-DD.
+- Script comment-based help may keep the established project date format, but it must represent the same calendar date.
+
+4. README and CHANGELOG
+-----------------------
+- README describes the current supported behavior.
+- CHANGELOG describes changes between released versions.
+- Do not document planned, deferred, or backlog features as completed.
+- Keep internal UX backlog and reviewer notes out of the public CHANGELOG unless there is a deliberate reason to publish them.
+- Validation limitations must be stated clearly when important, for example when a scenario was not runtime-tested.
+- Do not remove important safety limitations from documentation for brevity.
+
+5. Release Preparation
+----------------------
+Before creating a release:
+- Confirm the final script file name.
+- Confirm the internal version.
+- Confirm release date metadata.
+- Confirm README and CHANGELOG are current.
+- Confirm no unintended beta or rc text remains in user-facing output.
+- Run the required parser/static checks.
+- Run the agreed LAB regression tests.
+- Calculate and record the final SHA256 when the project publishes one.
+- Confirm the repository copy is byte-identical to the approved release file when byte identity matters.
+
+6. File Encoding and Line Endings
+---------------------------------
+- Preserve the approved encoding and line-ending format of release-critical files.
+- For PowerShell release files that must remain byte-identical, use repository attributes that prevent Git line-ending conversion.
+- Current convention for this repository family:
+  *.ps1 -text
+- Do not change encoding, BOM state, or line endings unintentionally during documentation or metadata edits.
+- After GitHub publication, verify the repository/raw file again when a SHA256 value is published.
+
+7. Commit Practice
+------------------
+- Commit messages should describe the actual change.
+- Prefer focused commits over broad mixed-purpose commits.
+- Release-preparation commits should make it obvious whether they contain code, documentation, metadata, or byte-preservation changes.
+- Do not claim code is unchanged unless the comparison proves it.
+
+8. Validation and Evidence
+--------------------------
+- Distinguish static review from runtime validation.
+- Do not mark a test PASS unless the captured output proves the expected behavior.
+- Record important release validation results and known untested scenarios.
+- Re-test high-risk paths after changes that can affect safety, parameter binding, Apply behavior, snapshots, drift detection, or verification.
+- Preserve reproducible hashes, commands, or outputs when they are part of release acceptance.
+
+9. GitHub Release
+-----------------
+A GitHub Release should include:
+- A version tag such as v1.1.
+- A clear release title.
+- A concise summary of the important changes.
+- Relevant validation notes.
+- SHA256 when the project publishes a hash.
+- The release must not be marked prerelease unless it is intentionally a prerelease.
+- Verify that the release tag points to the intended final commit.
+
+10. Post-Release Verification
+-----------------------------
+After publication:
+- Verify the Release is visible and not left as Draft.
+- Verify tag name and release title.
+- Verify the tag target commit.
+- Verify the release description.
+- Verify the final repository file hash when applicable.
+- Confirm main branch state intentionally matches or advances beyond the released tag.
+- Do not alter an already published release artifact silently.
+
+11. Documentation, Blog, and Screenshots
+----------------------------------------
+- Finalize and validate the release before preparing public blog content and screenshots.
+- Screenshots must reflect the released behavior, not an obsolete beta or rc build.
+- Blog text must not claim untested functionality.
+- If screenshots contain server names, domains, paths, tenant details, customer data, or credentials, sanitize them before publication.
+
+12. Backlog and Future Work
+---------------------------
+- Keep backlog items separate from released functionality.
+- Deferred work must not block a release unless it is classified as a release blocker.
+- New ideas discovered during release preparation should normally be recorded for the next development phase rather than added late to a validated release.
+
+13. Roles During Development
+----------------------------
+- Implementation and LAB execution may be delegated to a coding/testing agent.
+- Independent review should verify design, code impact, test evidence, documentation, and release consistency.
+- GitHub repository operations are handled separately from LAB execution.
+- Do not assume that a statement from an implementation agent is verified until the evidence is reviewed.
+
+14. Safety Principle
+--------------------
+When there is a conflict between cosmetic consistency and operational safety, preserve operational safety.
+
+End of document.
