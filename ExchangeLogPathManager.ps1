@@ -997,7 +997,8 @@ function Get-ModeInfo {
                 Description2 = 'No Exchange configuration changes will be made.'
             }
         }
-    }}
+    }
+}
 
 function Show-StartupBanner {
     param(
@@ -1996,6 +1997,7 @@ function New-ReferenceDesiredConfiguration {
             -TargetPathNote $targetPathNote `
             -DriveInfo $driveInfo))
     }
+
     return [PSCustomObject]@{
         Target         = $TargetSnapshot.Server
         TargetIdentity = $TargetSnapshot.Identity
@@ -2996,6 +2998,7 @@ function Get-ReviewFailureReportBlocks {
         [void]$failureLines.Add((New-ResultLine -Text ("    {0}" -f $failure.Message) -Color 'Red'))
         Add-ReportBlock -Blocks $blocks -Lines $failureLines
     }
+
     return ,@($blocks)
 }
 
