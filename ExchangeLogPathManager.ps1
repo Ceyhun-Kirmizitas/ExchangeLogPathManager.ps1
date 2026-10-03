@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Reviews, compares, and optionally applies supported Exchange Server transport log path settings.
 
@@ -997,6 +997,7 @@ function Get-ServiceFamilyGetCmd {
     if (-not $script:CapabilityMap.ContainsKey($ServiceKey)) { return $ServiceKey }
     return [string]$script:CapabilityMap[$ServiceKey].GetCmd
 }
+
 # A missing Set-* cmdlet or a missing parameter downgrades that single setting
 # to Review Only. It never aborts the whole run, so Review stays usable on any
 # supported Exchange version.
@@ -1997,6 +1998,7 @@ function New-TargetOperations {
     foreach ($serviceKey in @($changeList | ForEach-Object { $_.ServiceKey } | Select-Object -Unique)) {
         $serviceChanges = @($changeList | Where-Object { $_.ServiceKey -eq $serviceKey })
         if ($serviceChanges.Count -eq 0) { continue }
+
         $params = [ordered]@{ Identity = $Target }
         foreach ($change in $serviceChanges) {
             $params[[string]$change.Property] = $change.NewValue
@@ -2995,7 +2997,8 @@ try {
 
     Write-StatusHost -Text ("Pre-change JSON snapshot : {0}" -f $snapshotFiles.JsonPath) -ForegroundColor Green
     if ([string]::IsNullOrWhiteSpace($snapshotFiles.TxtPath)) {
-        Write-Warning ("The human readable pre-change snapshot could not be written. The JSON snapshot was written successfully. {0}" -f $snapshotFiles.TxtError)    }
+        Write-Warning ("The human readable pre-change snapshot could not be written. The JSON snapshot was written successfully. {0}" -f $snapshotFiles.TxtError)
+    }
     else {
         Write-StatusHost -Text ("Pre-change text snapshot : {0}" -f $snapshotFiles.TxtPath) -ForegroundColor Green
     }
